@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+        <hr>
+    </div>
+</div>
+
+{% if show_welcome %}
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h4>Welcome to Household Finance AI Platform!</h4>
+            <p>Get started by adding your first transaction to see insights and charts.</p>
+            <a href="{{ url_for('transactions.add_transaction') }}" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Add Your First Transaction
+            </a>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Metrics Cards -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <h5>Total Income</h5>
+            <h3 class="text-success">${{ "%.2f"|format(metrics.total_income) }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <h5>Total Expenses</h5>
+            <h3 class="text-danger">${{ "%.2f"|format(metrics.total_expense) }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <h5>Net Savings</h5>
+            <h3 class="text-primary">${{ "%.2f"|format(metrics.savings) }}</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card text-center">
+            <h5>Savings Rate</h5>
+            <h3 class="text-info">{{ "%.1f"|format(metrics.savings_rate) }}%</h3>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Transactions</h5>
+                <a href="{{ url_for('transactions.view_transactions') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                {% if transactions %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                            <tr>
+                                <td>{{ transaction.date.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <span class="badge {% if transaction.type == 'income' %}bg-success{% else %}bg-danger{% endif %}">
+                                </td>
+                                <td>{{ transaction.category }}</td>
+                                <td>${{ "%.2f"|format(transaction.amount) }}</td>
+                                <td>{{ transaction.note or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No transactions found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('transactions.add_transaction') }}" class="btn btn-primary w-100">
+                            <i class="fas fa-plus-circle"></i> Add Transaction
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('charts.charts_page') }}" class="btn btn-info w-100">
+                            <i class="fas fa-chart-bar"></i> View Charts
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('insights.insights_page') }}" class="btn btn-success w-100">
+                            <i class="fas fa-lightbulb"></i> AI Insights
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('transactions.view_transactions') }}" class="btn btn-secondary w-100">
+                            <i class="fas fa-list"></i> All Transactions
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Add this section to dashboard.html -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-eye"></i> Feature Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Recent AI Categorizations:</h6>
+                        <div id="ai-activity">
+                            <p class="text-muted">Add transactions with empty categories to see AI in action</p>
+                        </div>
+                        <a href="/add-test-data" class="btn btn-sm btn-outline-primary mt-2">
+                            <i class="fas fa-vial"></i> Add Test Data
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Active Features Right Now:</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item">
+                                <i class="fas fa-shield-alt text-success"></i>
+                                Security: Input sanitization on every form
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-robot text-success"></i>
+                                NLP: Entity extraction from transaction notes
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-brain text-success"></i>
+                                Gemini AI: Ready for categorization (when category empty)
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-chart-line text-success"></i>
+                                Predictive Analytics: Analyzing expense patterns
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this section to your dashboard.html -->
+<!-- Replace your current feature status section with this -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-check-circle"></i> Feature Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="feature-status">
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>NLP Processing</h6>
+                                <div id="nlp-status" class="text-success">
+                                    <i class="fas fa-check-circle"></i> Working
+                                </div>
+                                <small class="text-muted">spaCy entity extraction</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>LLM Integration</h6>
+                                <div id="llm-status" class="text-success">
+                                    <i class="fas fa-check-circle"></i> Working
+                                </div>
+                                <small class="text-muted">Gemini AI categorization</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>Real Dataset</h6>
+                                <div id="dataset-status" class="text-success">
+                                    <i class="fas fa-check-circle"></i> 10,000 records
+                                </div>
+                                <small class="text-muted">Household income data</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>Security Features</h6>
+                                <div id="security-status" class="text-success">
+                                    <i class="fas fa-check-circle"></i> Active
+                                </div>
+                                <small class="text-muted">Encryption & validation</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>Agent Communication</h6>
+                                <div id="mcp-status" class="text-success">
+                                    <i class="fas fa-check-circle"></i> Online
+                                </div>
+                                <small class="text-muted">MCP protocol</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6>Predictive Analytics</h6>
+                                <div id="analytics-status" class="text-success">
+                                    <i class="fas fa-check-circle"></i> Available
+                                </div>
+                                <small class="text-muted">AI-powered insights</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manual Refresh Button -->
+                <div class="text-center mt-3">
+                    <button onclick="checkFeatureStatus()" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh Status
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+// Add this to your dashboard.html or base.html
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    checkFeatureStatus();
+});
+
+function checkFeatureStatus() {
+    fetch('/api/feature-status')
+        .then(response => response.json())
+        .then(data => {
+            updateFeatureStatus('nlp', data.nlp);
+            updateFeatureStatus('llm', data.llm);
+            updateFeatureStatus('dataset', data.dataset);
+            updateFeatureStatus('security', data.security);
+            updateFeatureStatus('mcp', data.mcp);
+            updateFeatureStatus('analytics', data.analytics);
+        })
+        .catch(error => {
+            console.error('Error fetching feature status:', error);
+            // Set all to error state
+            const features = ['nlp', 'llm', 'dataset', 'security', 'mcp', 'analytics'];
+            features.forEach(feature => {
+                updateFeatureStatus(feature, {working: false, status: 'Error', details: 'Failed to check'});
+            });
+        });
+}
+
+function updateFeatureStatus(featureId, status) {
+    const element = document.getElementById(`${featureId}-status`);
+    if (!element) return;
+    
+    if (status.working) {
+        element.innerHTML = `<i class="fas fa-check-circle text-success"></i> ${status.status}`;
+        element.className = 'text-success';
+    } else {
+        element.innerHTML = `<i class="fas fa-times-circle text-danger"></i> ${status.status}`;
+        element.className = 'text-danger';
+    }
+    
+    // Add tooltip with details
+    element.title = status.details;
+}
+</script>

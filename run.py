@@ -1,4 +1,6 @@
-from agents.architect_agent import ArchitectAgent
+from app import create_app
 
-if __name__ == "__main__":
-    ArchitectAgent().start()
+app = create_app()
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

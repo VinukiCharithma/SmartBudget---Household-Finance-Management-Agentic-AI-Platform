@@ -1,383 +1,528 @@
-import os
-import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
+import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression
-import warnings
-warnings.filterwarnings('ignore')
+from datetime import datetime, timedelta
 
-CHART_DIR = "visualizations/static_charts"
 
 class ChartCreatorAgent:
+    """
+    Fixed chart creator with proper JSON serialization
+    """
+
     def __init__(self, data_agent):
         self.data_agent = data_agent
-        os.makedirs(CHART_DIR, exist_ok=True)
-        self.chart_descriptions = {}
 
-    # Basic Chart Methods
-    def pie_expenses_by_category(self, save=True, show=False, time_range=None):
-        """Generate pie chart for category-wise expenses with filtering"""
-        df = self._get_filtered_data(time_range)
-        if df is None or df.empty:
-            return self._create_empty_chart("No data available for pie chart")
-        
-        exp = df[df["type"] == "expense"]
-        if exp.empty:
-            return self._create_empty_chart("No expenses data available")
-        
-        totals = exp.groupby("category")["amount"].sum()
-        if totals.empty:
-            return self._create_empty_chart("No expense categories found")
-        
-        fig = px.pie(values=totals.values, names=totals.index, title="Expenses by Category")
-        caption = self._generate_caption(
-            chart_type="pie",
-            comparison="distribution of expenses across different categories",
-            reasoning="Pie charts are ideal for showing proportional distribution of categorical data",
-            insights=self._get_expense_insights(totals)
-        )
-        return self._finalize_chart(fig, "expenses_by_category", save, caption)
+    def _prepare_transaction_data(self, transactions):
+        """Prepare and normalize transaction data with proper field names"""
+        if not transactions:
+            print("❌ No transactions provided to chart creator")
+            return None
 
-    def bar_income_vs_expense(self, save=True, show=False, time_range=None):
-        """Generate bar chart for monthly income vs expenses"""
-        df = self._get_filtered_data(time_range)
-        if df is None or df.empty:
-            return self._create_empty_chart("No data available for bar chart")
-        
-        df_copy = df.copy()
-        df_copy['date'] = pd.to_datetime(df_copy['date'])
-        df_copy['month'] = df_copy['date'].dt.to_period('M').astype(str)
-        monthly_data = df_copy.groupby(['month', 'type'])['amount'].sum().unstack(fill_value=0)
-        
-        fig = go.Figure()
-        if 'income' in monthly_data.columns:
-            fig.add_trace(go.Bar(name='Income', x=monthly_data.index, y=monthly_data['income'], marker_color='green'))
-        if 'expense' in monthly_data.columns:
-            fig.add_trace(go.Bar(name='Expense', x=monthly_data.index, y=monthly_data['expense'], marker_color='red'))
-        
-        fig.update_layout(title="Monthly Income vs Expenses", barmode='group')
-        caption = self._generate_caption(
-            chart_type="bar",
-            comparison="monthly income versus expenses over time",
-            reasoning="Bar charts effectively compare categorical data across different periods",
-            insights=self._get_income_expense_insights(monthly_data)
-        )
-        return self._finalize_chart(fig, "income_vs_expense", save, caption)
+        try:
+            # Create DataFrame with consistent field names
+            transaction_list = []
+            for t in transactions:
+                # Handle both 'type' and 't_type' field names
+                transaction_type = getattr(t, "type", None) or getattr(
+                    t, "t_type", "expense"
+                )
 
-    def line_savings_over_time(self, save=True, show=False, time_range=None):
-        """Generate line graph for savings over time"""
-        df = self._get_filtered_data(time_range)
-        if df is None or df.empty:
-            return self._create_empty_chart("No data available for savings trend")
-        
-        df_copy = df.copy()
-        df_copy['date'] = pd.to_datetime(df_copy['date'])
-        df_copy['month'] = df_copy['date'].dt.to_period('M').astype(str)
-        monthly_totals = df_copy.groupby(['month', 'type'])['amount'].sum().unstack(fill_value=0)
-        monthly_totals['savings'] = monthly_totals.get('income', 0) - monthly_totals.get('expense', 0)
-        monthly_totals['cumulative_savings'] = monthly_totals['savings'].cumsum()
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=monthly_totals.index, y=monthly_totals['cumulative_savings'],
-                               mode='lines+markers', name='Cumulative Savings', line=dict(color='blue', width=3)))
-        fig.update_layout(title="Savings Over Time", xaxis_title="Month", yaxis_title="Amount")
-        caption = self._generate_caption(
-            chart_type="line",
-            comparison="cumulative savings growth over time",
-            reasoning="Line charts are perfect for showing trends and progress over time periods",
-            insights=self._get_savings_insights(monthly_totals)
-        )
-        return self._finalize_chart(fig, "savings_over_time", save, caption)
+                transaction_list.append(
+                    {
+                        "date": t.date,
+                        "type": str(transaction_type).lower().strip(),
+                        "category": (
+                            str(t.category).strip().title()
+                            if t.category
+                            else "Uncategorized"
+                        ),
+                        "amount": float(t.amount) if t.amount else 0.0,
+                        "note": t.note or "",
+                    }
+                )
 
-    # Advanced Features
-    def create_interactive_dashboard(self, filters=None):
-        """Create an interactive dashboard with filtering capabilities"""
-        df = self.data_agent.get_transactions_df()
-        if df is None or df.empty:
-            return self._create_empty_chart("No data available for dashboard")
-        
-        # Apply filters
-        if filters:
-            df = self._apply_filters(df, filters)
-        
-        # Create subplots
-        fig = make_subplots(
-            rows=2, cols=2,
-            subplot_titles=('Expenses by Category', 'Monthly Trends', 
-                          'Income vs Expense', 'Savings Progress'),
-            specs=[[{"type": "pie"}, {"type": "xy"}],
-                   [{"type": "xy"}, {"type": "xy"}]]
-        )
-        
-        # Pie chart - Expenses by category
-        expenses_df = df[df["type"] == "expense"]
-        if not expenses_df.empty:
-            category_totals = expenses_df.groupby("category")["amount"].sum()
-            fig.add_trace(go.Pie(labels=category_totals.index, values=category_totals.values,
-                               name="Expenses"), row=1, col=1)
-        
-        # Line chart - Monthly trends
-        df_copy = df.copy()
-        df_copy['date'] = pd.to_datetime(df_copy['date'])
-        df_copy['month'] = df_copy['date'].dt.to_period('M').astype(str)
-        monthly_trends = df_copy.groupby(['month', 'type'])['amount'].sum().unstack(fill_value=0)
-        
-        for col in monthly_trends.columns:
-            fig.add_trace(go.Scatter(x=monthly_trends.index, y=monthly_trends[col],
-                                   mode='lines+markers', name=col.title()),
-                         row=1, col=2)
-        
-        # Bar chart - Income vs Expense
-        if 'income' in monthly_trends.columns and 'expense' in monthly_trends.columns:
-            fig.add_trace(go.Bar(name='Income', x=monthly_trends.index, 
-                               y=monthly_trends['income']), row=2, col=1)
-            fig.add_trace(go.Bar(name='Expense', x=monthly_trends.index, 
-                               y=monthly_trends['expense']), row=2, col=1)
-        
-        # Savings progress
-        if 'income' in monthly_trends.columns and 'expense' in monthly_trends.columns:
-            savings = monthly_trends.get('income', 0) - monthly_trends.get('expense', 0)
-            fig.add_trace(go.Scatter(x=monthly_trends.index, y=savings.cumsum(),
-                                   mode='lines+markers', name='Cumulative Savings',
-                                   line=dict(color='green')), row=2, col=2)
-        
-        fig.update_layout(height=800, title_text="Financial Dashboard", showlegend=True)
-        return fig
+            df = pd.DataFrame(transaction_list)
 
-    def comparative_charts(self, current_period, previous_period):
-        """Generate comparative charts (this month vs last month)"""
-        df = self.data_agent.get_transactions_df()
-        if df is None or df.empty:
-            return self._create_empty_chart("No data available for comparative analysis")
-        
-        # Filter data for both periods
-        current_df = self._filter_by_period(df, current_period)
-        previous_df = self._filter_by_period(df, previous_period)
-        
-        # Create comparative bar chart
-        fig = go.Figure()
-        
-        # Compare expenses by category
-        current_expenses = current_df[current_df['type'] == 'expense'].groupby('category')['amount'].sum()
-        previous_expenses = previous_df[previous_df['type'] == 'expense'].groupby('category')['amount'].sum()
-        
-        categories = list(set(current_expenses.index) | set(previous_expenses.index))
-        
-        current_values = [current_expenses.get(cat, 0) for cat in categories]
-        previous_values = [previous_expenses.get(cat, 0) for cat in categories]
-        
-        fig.add_trace(go.Bar(name=current_period, x=categories, y=current_values))
-        fig.add_trace(go.Bar(name=previous_period, x=categories, y=previous_values))
-        
-        fig.update_layout(title=f"Expense Comparison: {current_period} vs {previous_period}",
-                         barmode='group')
-        
-        return fig
+            print(f"📊 Prepared {len(df)} transactions for charting")
 
-    def natural_language_to_chart(self, query):
-        """Convert natural language queries to charts"""
-        query = query.lower()
-        
-        # Parse the query
-        if any(word in query for word in ['electricity', 'utility', 'bill']):
-            return self._create_utility_chart(query)
-        elif any(word in query for word in ['month', 'last', 'recent']):
-            return self._create_time_based_chart(query)
-        elif any(word in query for word in ['category', 'categories']):
-            return self.pie_expenses_by_category()
-        elif any(word in query for word in ['income', 'expense', 'comparison']):
-            return self.bar_income_vs_expense()
-        elif any(word in query for word in ['savings', 'trend', 'progress']):
-            return self.line_savings_over_time()
-        else:
-            return self.create_interactive_dashboard()
+            if not df.empty:
+                # Debug: Show expense data specifically
+                expense_df = df[df["type"] == "expense"]
+                if not expense_df.empty:
+                    print("💰 Expense data summary:")
+                    expense_summary = (
+                        expense_df.groupby("category")["amount"]
+                        .agg(["sum", "count"])
+                        .round(2)
+                    )
+                    print(expense_summary)
+                    print(f"💵 Total expenses: ${expense_df['amount'].sum():.2f}")
 
-    def predictive_charts(self, periods=6):
-        """Generate predictive charts for future expenses/savings"""
-        df = self.data_agent.get_transactions_df()
-        if df is None or df.empty:
-            return self._create_empty_chart("No data available for predictions")
-        
-        # Prepare data for forecasting
-        df_copy = df.copy()
-        df_copy['date'] = pd.to_datetime(df_copy['date'])
-        df_copy['month'] = df_copy['date'].dt.to_period('M').astype(str)
-        
-        monthly_data = df_copy.groupby(['month', 'type'])['amount'].sum().unstack(fill_value=0)
-        monthly_data = monthly_data.sort_index()
-        
-        # Create future predictions using linear regression
-        future_months = self._generate_future_months(monthly_data.index[-1], periods)
-        
-        fig = go.Figure()
-        
-        # Plot historical data and predictions for each type
-        for col in ['income', 'expense']:
-            if col in monthly_data.columns:
-                historical_values = monthly_data[col].values
-                
-                # Simple linear regression for prediction
-                if len(historical_values) > 1:
-                    X = np.arange(len(historical_values)).reshape(-1, 1)
-                    model = LinearRegression()
-                    model.fit(X, historical_values)
-                    
-                    # Predict future values
-                    future_X = np.arange(len(historical_values), len(historical_values) + periods).reshape(-1, 1)
-                    future_values = model.predict(future_X)
-                    
-                    # Combine historical and future data
-                    all_months = list(monthly_data.index) + future_months
-                    all_values = list(historical_values) + list(future_values)
-                    
-                    fig.add_trace(go.Scatter(x=all_months, y=all_values, 
-                                           mode='lines+markers', name=f'{col.title()}',
-                                           line=dict(dash='solid' if col == 'income' else 'dash')))
-        
-        fig.update_layout(title=f"Financial Projections (Next {periods} Months)")
-        return fig
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.sort_values("date")
 
-    # Helper Methods
-    def _get_filtered_data(self, time_range=None):
-        """Get filtered data based on time range"""
-        df = self.data_agent.get_transactions_df()
-        if df is None or df.empty:
             return df
-        
-        if time_range:
-            df_copy = df.copy()
-            df_copy['date'] = pd.to_datetime(df_copy['date'])
-            if time_range == 'last_3_months':
-                cutoff_date = datetime.now() - timedelta(days=90)
-                df = df_copy[df_copy['date'] >= cutoff_date]
-            elif time_range == 'last_6_months':
-                cutoff_date = datetime.now() - timedelta(days=180)
-                df = df_copy[df_copy['date'] >= cutoff_date]
-            elif time_range == 'this_year':
-                current_year = datetime.now().year
-                df = df_copy[df_copy['date'].dt.year == current_year]
-        
-        return df
 
-    def _generate_caption(self, chart_type, comparison, reasoning, insights):
-        """Generate automatic captions for charts"""
-        caption = {
-            'chart_type': chart_type,
-            'comparison': comparison,
-            'reasoning': reasoning,
-            'insights': insights,
-            'summary': f"This {chart_type} chart shows {comparison}. {reasoning}. Key insight: {insights}"
-        }
-        return caption
+        except Exception as e:
+            print(f"❌ Error preparing transaction data: {e}")
+            import traceback
 
-    def _finalize_chart(self, fig, chart_name, save, caption):
-        """Finalize chart with common settings and save if needed"""
-        fig.update_layout(
-            template="plotly_white",
-            font=dict(size=12),
-            margin=dict(l=50, r=50, t=50, b=50)
-        )
-        
-        if save:
-            path = os.path.join(CHART_DIR, f"{chart_name}.html")
-            fig.write_html(path)
-            print(f"📊 Saved: {path}")
-        
-        # Store caption for later retrieval
-        self.chart_descriptions[chart_name] = caption
-        
-        return fig, caption
+            traceback.print_exc()
+            return None
+
+    def create_expenses_by_category_chart(self, transactions):
+        """Create expenses by category pie chart with proper data filtering"""
+        print("🎯 Creating expenses by category pie chart...")
+        df = self._prepare_transaction_data(transactions)
+        if df is None or df.empty:
+            return self._create_empty_chart("No transaction data available")
+
+        try:
+            # Get only expense transactions
+            expenses_df = df[df["type"].str.lower() == "expense"]
+            print(f"📊 Found {len(expenses_df)} expense transactions after filtering")
+
+            if expenses_df.empty:
+                print("❌ No expense transactions after filtering")
+                return self._create_empty_chart("No expense transactions found")
+
+            # Calculate category totals - SUM of amounts
+            category_totals = (
+                expenses_df.groupby("category")["amount"].sum().reset_index()
+            )
+            category_totals = category_totals[category_totals["amount"] > 0]
+            category_totals = category_totals.sort_values("amount", ascending=False)
+
+            total_expenses = category_totals["amount"].sum()
+            print(f"📊 Total expenses calculated: ${total_expenses:.2f}")
+            print(f"📊 Category amounts:")
+            for _, row in category_totals.iterrows():
+                print(f"   - {row['category']}: ${row['amount']:.2f}")
+
+            # Convert to regular Python lists to avoid numpy serialization issues
+            categories = category_totals["category"].tolist()
+            amounts = category_totals["amount"].tolist()
+
+            # Create pie chart with explicit data
+            fig = go.Figure()
+
+            fig.add_trace(
+                go.Pie(
+                    labels=categories,
+                    values=amounts,
+                    hole=0.3,
+                    marker=dict(colors=px.colors.qualitative.Set3),
+                    hovertemplate="<b>%{label}</b><br>Amount: $%{value:.2f}<br>Percentage: %{percent}<extra></extra>",
+                    textinfo="label+percent",
+                    textposition="inside",
+                )
+            )
+
+            fig.update_layout(
+                title=f"Expenses by Category<br><sub>Total Expenses: ${total_expenses:.2f}</sub>",
+                showlegend=True,
+                height=500,
+                annotations=[
+                    dict(
+                        text=f"Total<br>${total_expenses:.2f}",
+                        x=0.5,
+                        y=0.5,
+                        font_size=14,
+                        showarrow=False,
+                    )
+                ],
+            )
+
+            print("✅ Expenses pie chart created successfully")
+            return fig
+
+        except Exception as e:
+            print(f"❌ Expenses pie chart error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return self._create_error_chart(f"Error creating expenses chart: {str(e)}")
+
+    def create_expenses_bar_chart(self, transactions):
+        """Create horizontal bar chart for expenses by category"""
+        print("🎯 Creating expenses by category bar chart...")
+        df = self._prepare_transaction_data(transactions)
+        if df is None or df.empty:
+            return self._create_empty_chart("No transaction data available")
+
+        try:
+            # Get only expense transactions
+            expenses_df = df[df["type"].str.lower() == "expense"]
+            print(f"📊 Found {len(expenses_df)} expense transactions for bar chart")
+
+            if expenses_df.empty:
+                return self._create_empty_chart("No expense transactions found")
+
+            # Calculate category totals
+            category_totals = (
+                expenses_df.groupby("category")["amount"].sum().reset_index()
+            )
+            category_totals = category_totals[category_totals["amount"] > 0]
+            category_totals = category_totals.sort_values("amount", ascending=True)
+
+            total_expenses = category_totals["amount"].sum()
+
+            # Convert to regular Python lists
+            categories = category_totals["category"].tolist()
+            amounts = category_totals["amount"].tolist()
+            percentages = [(amt / total_expenses * 100) for amt in amounts]
+
+            # Create horizontal bar chart
+            fig = go.Figure()
+
+            fig.add_trace(
+                go.Bar(
+                    y=categories,
+                    x=amounts,
+                    orientation="h",
+                    marker_color="#e74c3c",
+                    hovertemplate="<b>%{y}</b><br>Amount: $%{x:.2f}<br>Percentage: %{customdata:.1f}%<extra></extra>",
+                    customdata=percentages,
+                    text=[f"${amt:.2f}" for amt in amounts],
+                    textposition="auto",
+                )
+            )
+
+            fig.update_layout(
+                title=f"Expenses by Category - Bar Chart<br><sub>Total: ${total_expenses:.2f}</sub>",
+                xaxis_title="Amount ($)",
+                yaxis_title="Categories",
+                showlegend=False,
+                height=max(400, len(categories) * 40),
+                bargap=0.2,
+            )
+
+            print("✅ Expenses bar chart created successfully")
+            return fig
+
+        except Exception as e:
+            print(f"❌ Expenses bar chart error: {e}")
+            return self._create_error_chart(
+                f"Error creating expenses bar chart: {str(e)}"
+            )
+
+    def create_category_comparison_chart(self, transactions):
+        """Create a comparison chart showing both transaction count and amount"""
+        print("🎯 Creating category comparison chart...")
+        df = self._prepare_transaction_data(transactions)
+        if df is None or df.empty:
+            return self._create_empty_chart("No transaction data available")
+
+        try:
+            # Get expense transactions
+            expenses_df = df[df["type"].str.lower() == "expense"]
+
+            if expenses_df.empty:
+                return self._create_empty_chart("No expense transactions found")
+
+            # Calculate both count and sum for each category
+            category_stats = (
+                expenses_df.groupby("category")
+                .agg({"amount": ["sum", "count"]})
+                .round(2)
+            )
+
+            # Flatten column names
+            category_stats.columns = ["total_amount", "transaction_count"]
+            category_stats = category_stats.reset_index()
+            category_stats = category_stats.sort_values("total_amount", ascending=False)
+
+            print("📊 Category Comparison Stats:")
+            print(category_stats)
+
+            # Create subplot with two bars
+            fig = make_subplots(
+                rows=1,
+                cols=2,
+                subplot_titles=(
+                    "Total Amount by Category",
+                    "Transaction Count by Category",
+                ),
+                specs=[[{"type": "bar"}, {"type": "bar"}]],
+            )
+
+            # Amount bar chart
+            fig.add_trace(
+                go.Bar(
+                    x=category_stats["category"],
+                    y=category_stats["total_amount"],
+                    name="Total Amount",
+                    marker_color="#e74c3c",
+                    hovertemplate="<b>%{x}</b><br>Amount: $%{y:.2f}<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
+
+            # Count bar chart
+            fig.add_trace(
+                go.Bar(
+                    x=category_stats["category"],
+                    y=category_stats["transaction_count"],
+                    name="Transaction Count",
+                    marker_color="#3498db",
+                    hovertemplate="<b>%{x}</b><br>Count: %{y}<extra></extra>",
+                ),
+                row=1,
+                col=2,
+            )
+
+            fig.update_layout(
+                title="Category Comparison: Amount vs Transaction Count",
+                height=500,
+                showlegend=False,
+            )
+
+            fig.update_xaxes(tickangle=45, row=1, col=1)
+            fig.update_xaxes(tickangle=45, row=1, col=2)
+            fig.update_yaxes(title_text="Amount ($)", row=1, col=1)
+            fig.update_yaxes(title_text="Count", row=1, col=2)
+
+            print("✅ Category comparison chart created successfully")
+            return fig
+
+        except Exception as e:
+            print(f"❌ Category comparison chart error: {e}")
+            return self._create_error_chart(
+                f"Error creating comparison chart: {str(e)}"
+            )
+
+    def create_income_vs_expenses_chart(self, transactions):
+        """Create income vs expenses chart with proper scaling"""
+        print("🎯 Creating income vs expenses chart...")
+        df = self._prepare_transaction_data(transactions)
+        if df is None or df.empty:
+            return self._create_empty_chart("No transaction data available")
+
+        try:
+            # Create monthly aggregates
+            df["month"] = df["date"].dt.to_period("M")
+            monthly_data = (
+                df.groupby(["month", "type"])["amount"].sum().unstack(fill_value=0)
+            )
+
+            print(f"📊 Monthly data columns: {monthly_data.columns.tolist()}")
+            print(f"📊 Monthly data:\n{monthly_data}")
+
+            # Ensure required columns exist
+            for col in ["income", "expense"]:
+                if col not in monthly_data.columns:
+                    monthly_data[col] = 0
+
+            monthly_data.index = monthly_data.index.astype(str)
+
+            total_income = monthly_data["income"].sum()
+            total_expenses = monthly_data["expense"].sum()
+            print(f"📊 Total income: ${total_income:.2f}")
+            print(f"📊 Total expenses: ${total_expenses:.2f}")
+
+            # Convert to regular lists to avoid scaling issues
+            months = monthly_data.index.tolist()
+            income_values = monthly_data["income"].tolist()
+            expense_values = monthly_data["expense"].tolist()
+            net_values = [inc - exp for inc, exp in zip(income_values, expense_values)]
+
+            fig = go.Figure()
+
+            # Add income bars
+            if total_income > 0:
+                fig.add_trace(
+                    go.Bar(
+                        name="Income",
+                        x=months,
+                        y=income_values,
+                        marker_color="#2ecc71",
+                        hovertemplate="<b>%{x}</b><br>Income: $%{y:,.2f}<extra></extra>",
+                    )
+                )
+
+            # Add expense bars
+            if total_expenses > 0:
+                fig.add_trace(
+                    go.Bar(
+                        name="Expenses",
+                        x=months,
+                        y=expense_values,
+                        marker_color="#e74c3c",
+                        hovertemplate="<b>%{x}</b><br>Expenses: $%{y:,.2f}<extra></extra>",
+                    )
+                )
+
+            # Add net savings line
+            fig.add_trace(
+                go.Scatter(
+                    name="Net Savings",
+                    x=months,
+                    y=net_values,
+                    mode="lines+markers",
+                    line=dict(color="#3498db", width=3),
+                    marker=dict(size=8),
+                    hovertemplate="<b>%{x}</b><br>Net: $%{y:,.2f}<extra></extra>",
+                )
+            )
+
+            fig.update_layout(
+                title="Income vs Expenses Over Time",
+                barmode="group",
+                xaxis_title="Month",
+                yaxis_title="Amount ($)",
+                hovermode="x unified",
+                height=500,
+                showlegend=True,
+            )
+
+            print("✅ Income vs expenses chart created successfully")
+            return fig
+
+        except Exception as e:
+            print(f"❌ Income vs Expenses chart error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return self._create_error_chart(
+                f"Error creating income vs expenses chart: {str(e)}"
+            )
 
     def _create_empty_chart(self, message):
-        """Create an empty chart with a message"""
+        """Create empty chart with message"""
         fig = go.Figure()
-        fig.add_annotation(text=message, xref="paper", yref="paper",
-                          x=0.5, y=0.5, xanchor="center", yanchor="middle",
-                          showarrow=False, font=dict(size=16))
-        fig.update_layout(title=message)
-        return fig, {"error": message}
+        fig.add_annotation(
+            text=message,
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=16, color="gray"),
+        )
+        fig.update_layout(
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor="white",
+            title="No Data Available",
+        )
+        return fig
 
-    # Insight generation methods
-    def _get_expense_insights(self, category_totals):
-        """Generate insights from expense data"""
-        if len(category_totals) == 0:
-            return "No expense data available"
-        
-        top_category = category_totals.idxmax()
-        top_amount = category_totals.max()
-        total_expenses = category_totals.sum()
-        percentage = (top_amount / total_expenses) * 100
-        
-        return f"'{top_category}' is your largest expense category at ${top_amount:.2f} ({percentage:.1f}% of total expenses)"
+    def _create_error_chart(self, message):
+        """Create error chart"""
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error: {message}",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=14, color="red"),
+        )
+        fig.update_layout(
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor="white",
+            title="Chart Error",
+        )
+        return fig
 
-    def _get_income_expense_insights(self, monthly_data):
-        """Generate insights from income vs expense data"""
-        if 'income' not in monthly_data.columns or 'expense' not in monthly_data.columns:
-            return "Insufficient data for income-expense comparison"
-        
-        avg_income = monthly_data['income'].mean()
-        avg_expense = monthly_data['expense'].mean()
-        savings_rate = ((avg_income - avg_expense) / avg_income * 100) if avg_income > 0 else 0
-        
-        return f"Average monthly income: ${avg_income:.2f}, expenses: ${avg_expense:.2f}, savings rate: {savings_rate:.1f}%"
+    def create_spending_timeline_chart(self, transactions):
+        """Create spending timeline chart with proper daily aggregation"""
+        print("🎯 Creating spending timeline chart...")
 
-    def _get_savings_insights(self, monthly_totals):
-        """Generate insights from savings data"""
-        if 'savings' not in monthly_totals.columns:
-            return "No savings data available"
-        
-        current_savings = monthly_totals['cumulative_savings'].iloc[-1] if len(monthly_totals) > 0 else 0
-        avg_monthly_savings = monthly_totals['savings'].mean() if len(monthly_totals) > 0 else 0
-        
-        return f"Current savings: ${current_savings:.2f}, average monthly savings: ${avg_monthly_savings:.2f}"
+        # Prepare data manually to ensure proper aggregation
+        expense_data = []
+        for t in transactions:
+            transaction_type = getattr(t, "type", None) or getattr(t, "t_type", "expense")
+            if str(transaction_type).lower() == "expense":
+                expense_data.append(
+                    {
+                        "date": t.date,
+                        "amount": float(t.amount) if t.amount else 0.0,
+                        "category": t.category,
+                        "note": t.note,
+                   }
+                )
 
-    def _apply_filters(self, df, filters):
-        """Apply filters to dataframe"""
-        df_copy = df.copy()
-        if 'category' in filters and filters['category']:
-            df_copy['category'] = df_copy['category'].fillna('')
-            df_copy = df_copy[df_copy['category'].isin(filters['category'])]
-        if 'date_range' in filters and filters['date_range']:
-            start_date, end_date = filters['date_range']
-            df_copy = df_copy[(df_copy['date'] >= start_date) & (df_copy['date'] <= end_date)]
-        if 'type' in filters and filters['type']:
-            df_copy['type'] = df_copy['type'].fillna('')
-            df_copy = df_copy[df_copy['type'].isin(filters['type'])]
-        return df_copy
+        if not expense_data:
+            return self._create_empty_chart("No expense transactions found")
 
-    def _filter_by_period(self, df, period):
-        """Filter dataframe by time period"""
-        df_copy = df.copy()
-        df_copy['date'] = pd.to_datetime(df_copy['date'])
-        
-        if period == 'this_month':
-            current_date = datetime.now()
-            return df_copy[(df_copy['date'].dt.month == current_date.month) & 
-                          (df_copy['date'].dt.year == current_date.year)]
-        elif period == 'last_month':
-            current_date = datetime.now()
-            last_month = current_date.month - 1 if current_date.month > 1 else 12
-            year = current_date.year if current_date.month > 1 else current_date.year - 1
-            return df_copy[(df_copy['date'].dt.month == last_month) & 
-                          (df_copy['date'].dt.year == year)]
-        elif period == 'this_year':
-            current_year = datetime.now().year
-            return df_copy[df_copy['date'].dt.year == current_year]
-        return df_copy
+        try:
+            # Create DataFrame and ensure proper date handling
+            df = pd.DataFrame(expense_data)
+            df["date"] = pd.to_datetime(df["date"])
 
-    def _generate_future_months(self, last_month, periods):
-        """Generate future month labels for predictions"""
-        last_date = pd.to_datetime(last_month + '-01')
-        future_months = []
-        for i in range(1, periods + 1):
-            future_date = last_date + pd.DateOffset(months=i)
-            future_months.append(future_date.strftime('%Y-%m'))
-        return future_months
+            # Group by date and sum amounts - this should give us daily totals
+            daily_expenses = df.groupby("date")["amount"].sum().reset_index()
+            daily_expenses = daily_expenses.sort_values("date")
 
-    # Backward compatibility - keep the old method names
-    def line_monthly_expense_trend(self, save=True, show=False):
-        """Backward compatibility - redirect to savings over time"""
-        return self.line_savings_over_time(save=save, show=show)
+            print(f"📊 Daily expenses timeline - {len(daily_expenses)} days")
+            print("📊 Daily amounts:")
+            for _, row in daily_expenses.iterrows():
+                print(f"   - {row['date'].strftime('%Y-%m-%d')}: ${row['amount']:.2f}")
+
+            print(f"📊 Timeline total: ${daily_expenses['amount'].sum():.2f}")
+            print(f"📊 Timeline max daily: ${daily_expenses['amount'].max():.2f}")
+            print(f"📊 Timeline min daily: ${daily_expenses['amount'].min():.2f}")
+
+            # Convert to regular Python lists
+            dates = daily_expenses["date"].dt.strftime("%Y-%m-%d").tolist()
+            amounts = daily_expenses["amount"].tolist()
+
+            # Create timeline chart
+            fig = go.Figure()
+
+            fig.add_trace(
+                go.Scatter(
+                    x=dates,
+                    y=amounts,
+                    mode="lines+markers",
+                    line=dict(color="#e74c3c", width=3),
+                    marker=dict(size=8, color="#e74c3c"),
+                    name="Daily Spending",
+                    hovertemplate="<b>%{x}</b><br>Amount: $%{y:.2f}<extra></extra>",
+                )
+            )
+
+            # Add 7-day moving average if we have enough data
+            if len(daily_expenses) > 7:
+                moving_avg = daily_expenses["amount"].rolling(window=7).mean().tolist()
+                fig.add_trace(
+                    go.Scatter(
+                        x=dates,
+                        y=moving_avg,
+                        mode="lines",
+                        line=dict(color="#3498db", width=3, dash="dash"),
+                        name="7-Day Average",
+                        hovertemplate="<b>%{x}</b><br>7-Day Avg: $%{y:.2f}<extra></extra>",
+                    )
+                )
+
+            # Calculate some stats for the title
+            total_spent = sum(amounts)
+            avg_daily = total_spent / len(amounts) if amounts else 0
+            max_daily = max(amounts) if amounts else 0
+
+            fig.update_layout(
+                title=f"Spending Timeline<br><sub>Total: ${total_spent:.2f} | Avg Daily: ${avg_daily:.2f} | Max: ${max_daily:.2f}</sub>",
+                xaxis_title="Date",
+                yaxis_title="Amount ($)",
+                hovermode="x unified",
+                height=500,
+                showlegend=len(daily_expenses)
+                > 7,  # Only show legend if we have moving average
+            )
+
+            print("✅ Spending timeline chart created successfully")
+            return fig
+
+        except Exception as e:
+            print(f"❌ Spending timeline chart error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return self._create_error_chart(f"Error creating timeline chart: {str(e)}")

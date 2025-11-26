@@ -1,13 +1,30 @@
-venv/
 __pycache__/
-*.pyc
-# Environment variables
+*.py[cod]
+*$py.class
 .env
-# Data files
-data/*.csv
-data/*.db
-# Model files
-models/*.pkl
-# OS-specific files
+.venv/
+venv/
+*.egg-info/
+
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+uploads/  # OCR receipt uploads
+
+.env
+.env.local
+secrets.py
+config_secret.py
+*.key
+*.pem
+
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
+
+*.log
+logs/
+*.tmp
+*.temp

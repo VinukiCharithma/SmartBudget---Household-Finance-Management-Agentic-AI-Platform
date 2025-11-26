@@ -1,39 +1,52 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, Date, ForeignKey, Enum
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from config.settings import DATABASE_URL
-from datetime import date
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from datetime import datetime
+from app import db  # Import db from app
 
-Base = declarative_base()
-
-class Household(Base):
+class Household(db.Model):
     __tablename__ = "households"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
-    users = relationship("User", back_populates="household")
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    users = db.relationship("User", back_populates="household")
 
-class User(Base):
+class User(UserMixin, db.Model):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True, nullable=False)
-    password_hash = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="user")  # 'admin' or 'user'
-    household_id = Column(Integer, ForeignKey("households.id"), nullable=True)
-    household = relationship("Household", back_populates="users")
-    transactions = relationship("Transaction", back_populates="user")
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(120), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="user")
+    household_id = db.Column(db.Integer, db.ForeignKey("households.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    household = db.relationship("Household", back_populates="users")
+    transactions = db.relationship("Transaction", back_populates="user")
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
 
-class Transaction(Base):
+class Transaction(db.Model):
     __tablename__ = "transactions"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    t_type = Column(String, nullable=False)  # "income" or "expense"
-    category = Column(String, nullable=False)
-    amount = Column(Float, nullable=False)
-    date = Column(Date, nullable=False, default=date.today)
-    note = Column(String, nullable=True)
-    user = relationship("User", back_populates="transactions")
-
-engine = create_engine(DATABASE_URL, echo=False, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-def init_db():
-    Base.metadata.create_all(engine)
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    type = db.Column(db.String(20), nullable=False)  # ✅ This should be 'type' not 't_type'
+    category = db.Column(db.String(100), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    note = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship("User", back_populates="transactions")
+    
+    def __repr__(self):
+        return f'<Transaction {self.id} {self.type} {self.amount}>'
+    
+# Add to your models
+class UserBudget(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    budgets = db.Column(db.JSON, nullable=False, default=dict)  # Store as JSON
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('budgets', lazy=True))
