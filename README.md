@@ -40,45 +40,6 @@ Produces insights based on spending behavior (overspending alerts, trends, savin
 
 ---
 
-## 🖼️ **📸 Screenshot Section**
-
-
-### 🖥️ Dashboard Overview
-
-*(Add your image here)*
-
-```
-![Dashboard](screenshots/dashboard.png)
-```
-
-### 📊 Expense Breakdown Chart
-
-*(Add your image here)*
-
-```
-![Expense Chart](screenshots/expense_chart.png)
-```
-
-### 📈 Savings Trend
-
-*(Add your image here)*
-
-```
-![Savings Trend](screenshots/savings_trend.png)
-```
-
-### 🤖 Insight Samples
-
-*(Add your image here)*
-
-```
-![Insights](screenshots/insights.png)
-```
-
-> Create a folder called **/screenshots** in your repo and drop the images in it.
-
----
-
 ## 🛠️ **Tech Stack**
 
 * **Python**
