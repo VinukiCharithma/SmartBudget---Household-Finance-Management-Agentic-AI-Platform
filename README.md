@@ -40,6 +40,15 @@ Produces insights based on spending behavior (overspending alerts, trends, savin
 
 ---
 
+## **Screenshots**
+
+![home](https://github.com/user-attachments/assets/0f584ab7-cdbc-4439-9d98-0e017c520ab9)
+![data](https://github.com/user-attachments/assets/bce6a7ec-b82c-4cc9-befc-5ea055a79cdf)
+![charts](https://github.com/user-attachments/assets/8665b3af-87d0-445d-9c4a-dc21e371e402)
+![insights](https://github.com/user-attachments/assets/e4638369-e841-4370-9631-1bfbaa13fc17)
+
+---
+
 ## 🛠️ **Tech Stack**
 
 * **Python**
